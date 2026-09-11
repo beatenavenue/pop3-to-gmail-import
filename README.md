@@ -1,5 +1,7 @@
 # pop3-to-gmail-import
 
+[日本語の説明はこちら](docs/README.ja.md)
+
 Imports mail from a POP3 mailbox into Gmail through the Gmail API, and discards selected messages before they ever reach Gmail.
 
 This repository exists mainly to record *why* it is built the way it is. The code is small and fitted to one person's situation. If you arrived here looking for a way to keep receiving POP3 mail in Gmail, the reasoning below is probably more useful to you than the code.
@@ -73,4 +75,4 @@ Work in progress. The design above is settled. The implementation is not written
 
 ## Setup
 
-Account and API setup that has to be done by hand is described in [SETUP.md](SETUP.md).
+Account and API setup that has to be done by hand is described in [docs/SETUP.md](docs/SETUP.md).

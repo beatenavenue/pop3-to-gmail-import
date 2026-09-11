@@ -1,0 +1,20 @@
+# Secrets and personal data. See CLAUDE.md for the full rules.
+
+# OAuth client secrets, as downloaded from the Google Cloud console.
+# The downloaded file name contains the client ID, so match it by pattern.
+client_secret*.json
+
+# OAuth access and refresh tokens.
+token.json
+
+# Local configuration holding the real POP3 host, credentials and list address.
+# Placeholder copies are committed as config.*.example instead.
+config.*
+!config.*.example
+
+# Editor and OS noise.
+.DS_Store
+*~
+
+# Local Claude Code settings.
+.claude/settings.local.json

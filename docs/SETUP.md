@@ -1,5 +1,7 @@
 # Setup
 
+[日本語の説明はこちら](SETUP.ja.md)
+
 This document covers the steps that have to be done by hand in a browser, before any code is run. Running the tool and obtaining the OAuth refresh token are covered separately.
 
 Google Cloud console labels change from time to time. If a menu name below does not match what you see, look for the closest equivalent.
@@ -28,7 +30,14 @@ A billing account is not required. Standard use of the Gmail API is free.
 OAuth settings live under **Google Auth Platform** (older console versions call this the **OAuth consent screen**).
 
 1. Go to **Google Auth Platform** and click **Get started** if prompted.
-2. Under **Branding**, enter an app name and a support email. Only you will see these.
+2. Under **Branding**, fill in the following and save.
+   - **App name** and **User support email**. Only you will see these.
+   - **Application home page**. The URL of this repository (or your fork) works, for example `https://github.com/<user>/pop3-to-gmail-import`.
+   - **Application privacy policy link**. Point it to [PRIVACY.md](PRIVACY.md) in the same repository, for example `https://github.com/<user>/pop3-to-gmail-import/blob/main/docs/PRIVACY.md`.
+   - **Authorized domains**. Add the domain used by the two links above, which is `github.com` in this example.
+   - **Developer contact information**. Your email address.
+
+   The home page and privacy policy are optional while the app is in **Testing**, but the app cannot be published to production without them (see step 5). They are not reviewed, since this app never goes through verification, but they should point to pages that actually exist.
 3. Under **Audience**, choose **External** as the user type. **Internal** is only available to Google Workspace organizations.
 4. Under **Data Access**, click **Add or remove scopes** and add the following scope manually.
 
@@ -49,6 +58,8 @@ This file contains the client secret. Keep it out of the repository and out of a
 ## 5. Publish the app to production
 
 Under **Audience**, click **Publish app** and confirm.
+
+If the button is disabled, the branding configuration is incomplete. Hovering over the button shows what is required. In particular, the home page and privacy policy links from step 3 are mandatory for production even though the Branding page does not mark them as required.
 
 Do this *before* authorizing. While the publishing status is **Testing**, refresh tokens for external users expire after 7 days, and the tool would stop working every week.
 

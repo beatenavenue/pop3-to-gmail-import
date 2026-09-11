@@ -11,6 +11,12 @@ A small tool that fetches mail over POP3, discards messages matching a simple ru
 - Write all repository content in English. This covers documentation, code comments, identifiers, commit messages, and issue or pull request text.
 - Talk to the user in their native language. For the maintainer this is Japanese. Do not switch the conversation to English just because the files are in English.
 
+### Translations
+
+Reader-facing documents may have a Japanese translation. These live in `docs` with a `.ja` suffix, such as `docs/README.ja.md` and `docs/SETUP.ja.md`, and they are the only files exempt from the English rule above. The English version is authoritative, and each translation says so at the top. When an English document changes, update its translation in the same commit or note that it is out of date.
+
+A link whose purpose is to send the reader to another language is written in the language it points to, not in the language of the surrounding document. The English README therefore links to the translation as `[日本語の説明はこちら]`. This is deliberate. Do not rewrite these links in English.
+
 ### English style
 
 The maintainer publishes this text under their own name, so it must not contain punctuation they would not use themselves.

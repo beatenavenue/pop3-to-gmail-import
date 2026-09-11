@@ -1,4 +1,3 @@
-Setup.md
 # Setup
 
 This document covers the steps that have to be done by hand in a browser, before any code is run. Running the tool and obtaining the OAuth refresh token are covered separately.

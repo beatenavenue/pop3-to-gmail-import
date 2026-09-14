@@ -8,9 +8,17 @@ client_secret*.json
 token.json
 
 # Local configuration holding the real POP3 host, credentials and list address.
-# Placeholder copies are committed as config.*.example instead.
-config.*
-!config.*.example
+# The placeholder copy .env.example is committed instead.
+.env
+
+# Python bytecode, virtual environments and development tool caches.
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
 # Editor and OS noise.
 .DS_Store

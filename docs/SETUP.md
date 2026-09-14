@@ -2,7 +2,7 @@
 
 [日本語の説明はこちら](SETUP.ja.md)
 
-This document covers the steps that have to be done by hand in a browser, before any code is run. Running the tool and obtaining the OAuth refresh token are covered separately.
+This document covers the one-time setup that has to be done by hand before the tool can run, from creating the Google Cloud project to obtaining and testing the OAuth refresh token. Running the tool itself is covered separately.
 
 Google Cloud console labels change from time to time. If a menu name below does not match what you see, look for the closest equivalent.
 
@@ -84,6 +84,53 @@ Collect the following for the source mailbox.
 
 If the server offers webmail, check whether messages deleted over POP3 are actually removed or only moved to a trash folder. If they are kept in a trash folder, the mailbox will still fill up.
 
+## 8. Obtain the refresh token
+
+Do this on a machine with a web browser, after step 5. The tool itself can run on a different, headless host, because a refresh token is tied to the OAuth client and the Gmail account, not to the machine it was obtained on.
+
+1. Run the following from the repository root, passing the client JSON downloaded in step 4.
+
+   ```
+   python3 tools/get_google_refresh_token.py /path/to/client_secret.json
+   ```
+
+2. A browser opens Google's consent page. If it does not open, copy the URL printed in the terminal into a browser on the same machine.
+3. Sign in with the Gmail account that will receive the mail, pass the unverified app warning as described in step 5, and allow access.
+4. When the browser shows "Response received. Return to the terminal.", go back to the terminal. The refresh token is printed on the last line.
+
+The program waits for Google's redirect on `127.0.0.1`, so the browser has to run on the same machine as the program. Running it on a remote host over SSH does not work.
+
+Each run issues a new refresh token. Only the 100 most recent tokens for the same client and account stay valid, so avoid running it more often than needed.
+
+## 9. Configure the host that runs the tool
+
+The host needs the client JSON as well as the refresh token, because refreshing an access token also sends the client ID and secret.
+
+1. In the repository root on that host, copy `.env.example` to `.env`.
+2. Copy the client JSON to the host, outside the repository, and set its path as `GOOGLE_CLIENT_SECRET_FILE`.
+3. Set the refresh token from step 8 as `GOOGLE_REFRESH_TOKEN`. Write values without quotes.
+4. Make both files readable only by your user.
+
+   ```
+   chmod 600 .env /path/to/client_secret.json
+   ```
+
+Treat the refresh token like a password. Move it with `scp` or by typing it into a terminal on the host, not through chat or a synced clipboard.
+
+## 10. Test the refresh token
+
+Run the following from the repository root on the host.
+
+```
+python3 tools/test_insert.py
+```
+
+This reads `.env`, refreshes an access token, and adds one synthetic message to the Gmail account with the subject `pop3import test` and the body `pop3import API test`. It uses the same API method, upload endpoint, and labels as the tool. On success it prints the new message ID and the labels Gmail applied. On failure it prints the error returned by Google and exits with a non-zero status.
+
+**The test message will almost certainly go to the Spam folder, not the inbox.** It comes from a placeholder address at `example.com` and has no DKIM signature, so Gmail treats it as spam. This is expected and does not mean the test failed. Look for it in Spam and delete it when you are done.
+
+Each run adds one more message.
+
 ## When the refresh token stops working
 
 A refresh token that worked before can become invalid in these cases.
@@ -94,4 +141,4 @@ A refresh token that worked before can become invalid in these cases.
 - The token went unused for six months
 - More than 100 refresh tokens were issued for the same client and account, which invalidates the oldest ones
 
-In any of these cases, authorize again to obtain a new refresh token.
+In any of these cases, obtain a new refresh token as in step 8 and replace `GOOGLE_REFRESH_TOKEN` in `.env`.

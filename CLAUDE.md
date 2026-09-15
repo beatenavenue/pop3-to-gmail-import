@@ -68,18 +68,29 @@ The standard library is the whole dependency list. Do not add a package, and do 
 
 The tool is started by an external scheduler such as cron, on whatever schedule the user chooses. Nothing in the tool may assume a fixed interval between runs.
 
+A key missing from `.env` ends in a `KeyError` traceback, and that is accepted. Users start from a copy of `.env.example`, which has every key, so do not add a friendlier check.
+
 Obtaining the refresh token is a separate one-off program. Keep it out of the import path, since the import path runs unattended and never needs a browser.
 
 In names, "insert" refers to the Gmail API side, after the `gmail.insert` scope, and "import" is reserved for real mail fetched over POP3. This holds even though both call `users.messages.import`. `tools/test_insert.py` pushes a synthetic test message and is named that way on purpose, so do not rename it.
 
-A message Gmail rejects permanently stays on the POP3 server. The tool neither deletes it nor saves it elsewhere. The user resolves it with a regular POP3 client such as Thunderbird, so the tool has to tell them which message it was, at least by UIDL. `tools/show_info_from_uidl.py`, planned below, turns that UIDL into headers the user can search for.
+The code is split into two files, so that the rule can grow without touching the import path. `mail_import.py` is the entry point a scheduler starts, and it does the fetch, the import, and the deletion. `mail_filter.py` holds the rule as `should_discard(message)`, which receives an `email.message.EmailMessage` parsed from the raw bytes with `email.policy.default` and returns True to delete the message without importing it. Pulling fields such as the subject or attachment filenames out of the message belongs in `mail_filter.py` too, so a new condition never changes the call in `mail_import.py`.
 
-The following are still open. Ask the user instead of choosing one. The recommendations given so far are noted, but none of them is a decision.
+A real rule names real addresses, so `mail_filter.py` is listed in `.gitignore`. The repository carries `mail_filter.example.py` instead, whose function always returns False. Carry `mail_filter.py` to another host by hand, the same way as `.env`.
+
+If the rule raises, the message is neither imported nor deleted, the other messages are still processed, and the run exits non-zero. Importing when the rule is broken could store exactly what the rule exists to destroy.
+
+Output names a message by its UIDL and never by anything taken from the message, such as its subject, its sender, or an exception message that might quote a header. The tool runs unattended and its output is kept in logs, which should only show what happened to which UIDL. `tools/show_info_from_uidl.py`, planned below, looks up the headers for a UIDL when someone needs them.
+
+Imported and rejected messages are recorded in a state file. Its path is `STATE_FILE` in `.env`, and a relative path is resolved against the repository root. The file is plain text with one line per message, holding a status word, a space, and the UIDL, such as `imported 000001a2b3c4d5e6` or `rejected 000001a2b3c4d5e8`. RFC 1939 limits a UIDL to 1 to 70 characters from 0x21 to 0x7E, so it never contains a space. The file holds identifiers only. Messages discarded by the filter are not recorded, since evaluating the rule again gives the same result.
+
+At startup, after `UIDL`, lines whose UIDL the server no longer lists are dropped, and the file is rewritten through a temporary file and `os.replace`. This also removes a line left unfinished by a crash. After a successful import, the line is appended and flushed with `fsync` before `DELE`. A message already recorded as imported is deleted without being imported again.
+
+A message Gmail rejects permanently stays on the POP3 server, and the user resolves it with a regular POP3 client such as Thunderbird. It is recorded as rejected and skipped on later runs. Only the run that meets the rejection exits non-zero, since exiting non-zero on every run would notify on every run until the user deals with the message. Only HTTP 400 and 413 count as permanent, since they point at the message itself. Any other error, 401, 403, 429, 5xx, and network errors included, concerns the account or the service. It stops the run, `QUIT` commits the deletions made so far, and the remaining messages wait for the next run.
+
+The following is still open. Ask the user instead of choosing.
 
 - Which host the tool runs on. Do not write deployment files before this is settled. No recommendation has been given
-- What the tool does on later runs with a message Gmail rejected permanently. The recommendation is to record its UIDL in the state file described below and skip it. The proposed line is that 4xx responses other than 429 are permanent, while 5xx, 429, and network errors are retried. The run that meets the rejection should exit non-zero so that someone notices, and later runs should skip the message silently, since exiting non-zero on every run would notify on every run until the user deals with the message. Whether that run also prints Date, From, and Subject next to the UIDL is open as well
-- Whether to keep a record of imported UIDLs, so an interrupted session does not import the same message twice. This is what getmail6 used its oldmail file for. It stores message identifiers, not message content. The recommendation is yes, from the start. Without it an interrupted session shows up as duplicates in Gmail that have to be cleaned up by hand, and it costs about fifteen lines. UIDLs the server no longer lists can be dropped from the record, so it does not grow without bound
-- The format of the state file, if one is kept. The recommendation is plain text with one line per message, holding a status word, a space, and the UIDL, such as `imported 000001a2b3c4d5e6` or `rejected 000001a2b3c4d5e8`. RFC 1939 limits a UIDL to 1 to 70 characters from 0x21 to 0x7E, so it never contains a space. The file holds identifiers only, never subjects or senders. Messages discarded by the filter are not recorded, since evaluating the rule again gives the same result. At startup, lines whose UIDL the server no longer lists are dropped, and the file is rewritten through a temporary file and `os.replace`. After a successful import, the line is appended and flushed with `fsync` before `DELE`. A malformed last line, left by a crash during a write, is ignored. The path comes from a `STATE_FILE` key in `.env`
 
 ### Planned `tools/show_info_from_uidl.py`
 
@@ -105,4 +116,4 @@ The two halves of this project are not held to the same standard. Fetching mail 
 
 ## Current state
 
-As of 2026-09-15, the maintainer's `.env` holds working credentials and a refresh token. `tools/test_insert.py` put a test message into Gmail, and `tools/test_pop3.py` logged in to the POP3 mailbox, both successfully. The import tool itself is not written yet. Implementation waits on answers to the open questions other than the host, which can stay open while the code is written. `tools/show_info_from_uidl.py` is planned but deliberately not written.
+As of 2026-09-15, the maintainer's `.env` holds working credentials and a refresh token. `tools/test_insert.py` put a test message into Gmail, and `tools/test_pop3.py` logged in to the POP3 mailbox, both successfully. `mail_import.py` and `mail_filter.example.py` are written and pass a check against a local fake POP3 server and a fake Gmail endpoint. On 2026-09-16 `mail_import.py` also imported mail successfully from a test POP3 mailbox, which is what the maintainer's `.env` points at for now. It has not run against the real mailbox yet. The maintainer's real rule in `mail_filter.py` is not written yet. README still says the implementation is not written, and running the tool is not documented yet. `tools/show_info_from_uidl.py` is planned but deliberately not written.

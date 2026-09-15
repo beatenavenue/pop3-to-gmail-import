@@ -7,9 +7,17 @@ client_secret*.json
 # OAuth access and refresh tokens.
 token.json
 
-# Local configuration holding the real POP3 host, credentials and list address.
+# Local configuration holding the real POP3 host and credentials.
 # The placeholder copy .env.example is committed instead.
 .env
+
+# The real filter rule, which usually names real addresses.
+# The placeholder copy mail_filter.example.py is committed instead.
+mail_filter.py
+
+# State file recording imported and rejected messages by UIDL.
+state.txt
+state.txt.tmp
 
 # Python bytecode, virtual environments and development tool caches.
 __pycache__/

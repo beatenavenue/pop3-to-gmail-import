@@ -2,6 +2,10 @@
 
 Guidance for Claude and other AI assistants working in this repository.
 
+This file is committed so that work in progress can be picked up on another development host. Nothing in it is meant for other readers, and it will be removed once the tool is complete.
+
+Claude's auto-memory stays on the machine where it was written, so do not rely on it to carry anything to a later session. Treat it as scoped to the current session, and record decisions, recommendations, and the state of the work in this file instead.
+
 ## Project
 
 A small tool that fetches mail over POP3, discards messages matching a simple rule, and imports the rest into Gmail with `users.messages.import`. See [README.md](README.md) for the motivation and the reasoning behind each design decision. Treat those decisions as settled unless the user explicitly revisits them.
@@ -38,6 +42,8 @@ Test fixtures must be synthetic. Real mail may contain personal data belonging t
 
 Provide `.example` files with placeholder values, and keep the real files listed in `.gitignore`. If you notice a secret or real message already staged or committed, stop and tell the user before doing anything else.
 
+Write for anyone who might use the tool, with work or private mail, on any machine and on any schedule. Do not describe the maintainer's own deployment anywhere in the repository, such as the kind of machine they run it on or the times they run it. The motivation in README that helps a reader decide whether the tool fits them is the exception.
+
 ## Invariants
 
 - Never delete a message from the POP3 server unless it was imported successfully or intentionally discarded by the filter.
@@ -60,18 +66,43 @@ Import through the media upload endpoint, `/upload/gmail/v1/users/me/messages/im
 
 The standard library is the whole dependency list. Do not add a package, and do not use `google-api-python-client`. What is needed is `email` for the rule and `urllib` for the token refresh and the upload.
 
-The tool is started by cron. The schedule can then differ by day and hour, which matters because this is work mail and weekday daytime volume is far higher than the weekend. Nothing in the tool may assume a fixed interval between runs.
+The tool is started by an external scheduler such as cron, on whatever schedule the user chooses. Nothing in the tool may assume a fixed interval between runs.
 
 Obtaining the refresh token is a separate one-off program. Keep it out of the import path, since the import path runs unattended and never needs a browser.
 
-The following are still open. Ask the user instead of choosing one.
+In names, "insert" refers to the Gmail API side, after the `gmail.insert` scope, and "import" is reserved for real mail fetched over POP3. This holds even though both call `users.messages.import`. `tools/test_insert.py` pushes a synthetic test message and is named that way on purpose, so do not rename it.
 
-- Which host the tool runs on. Do not write deployment files before this is settled
-- What to do with a message Gmail rejects permanently, since retrying it forever keeps it on the server
-- Whether to keep a record of imported UIDLs, so an interrupted session does not import the same message twice. This is what getmail6 used its oldmail file for. It stores message identifiers, not message content
+A message Gmail rejects permanently stays on the POP3 server. The tool neither deletes it nor saves it elsewhere. The user resolves it with a regular POP3 client such as Thunderbird, so the tool has to tell them which message it was, at least by UIDL. `tools/show_info_from_uidl.py`, planned below, turns that UIDL into headers the user can search for.
+
+The following are still open. Ask the user instead of choosing one. The recommendations given so far are noted, but none of them is a decision.
+
+- Which host the tool runs on. Do not write deployment files before this is settled. No recommendation has been given
+- What the tool does on later runs with a message Gmail rejected permanently. The recommendation is to record its UIDL in the state file described below and skip it. The proposed line is that 4xx responses other than 429 are permanent, while 5xx, 429, and network errors are retried. The run that meets the rejection should exit non-zero so that someone notices, and later runs should skip the message silently, since exiting non-zero on every run would notify on every run until the user deals with the message. Whether that run also prints Date, From, and Subject next to the UIDL is open as well
+- Whether to keep a record of imported UIDLs, so an interrupted session does not import the same message twice. This is what getmail6 used its oldmail file for. It stores message identifiers, not message content. The recommendation is yes, from the start. Without it an interrupted session shows up as duplicates in Gmail that have to be cleaned up by hand, and it costs about fifteen lines. UIDLs the server no longer lists can be dropped from the record, so it does not grow without bound
+- The format of the state file, if one is kept. The recommendation is plain text with one line per message, holding a status word, a space, and the UIDL, such as `imported 000001a2b3c4d5e6` or `rejected 000001a2b3c4d5e8`. RFC 1939 limits a UIDL to 1 to 70 characters from 0x21 to 0x7E, so it never contains a space. The file holds identifiers only, never subjects or senders. Messages discarded by the filter are not recorded, since evaluating the rule again gives the same result. At startup, lines whose UIDL the server no longer lists are dropped, and the file is rewritten through a temporary file and `os.replace`. After a successful import, the line is appended and flushed with `fsync` before `DELE`. A malformed last line, left by a crash during a write, is ignored. The path comes from a `STATE_FILE` key in `.env`
+
+### Planned `tools/show_info_from_uidl.py`
+
+This tool is not written yet, on purpose. There is no rejected message to test it against yet.
+
+It takes a UIDL as its argument and prints enough about the matching message on the POP3 server for the user to find it in a regular mail client.
+
+- Read the POP3 settings from `.env`. No Gmail credentials are needed
+- Find the message number with `UIDL`, its size with `LIST`, and its headers with `TOP <number> 0`, so the body is never downloaded
+- Print Subject, From, To, Date, Message-ID, the timestamp of the topmost `Received` header, and the size. Date is set by the sender and can be wrong, especially on spam, while the topmost `Received` header shows when the server accepted the message
+- Decode headers with `email.parser.BytesHeaderParser` and `email.policy.default`, and print a header raw when it cannot be decoded
+- Write only to standard output, never to disk, and never send `RETR` or `DELE`
+- Exit non-zero when the UIDL is not on the server or the session fails
+- `TOP` is optional in RFC 1939. Check that the server supports it when the tool is written
+
+POP3 servers usually lock the mailbox for the length of a session, so running this at the same time as a scheduled run makes one of the two fail to log in.
 
 ## Scope
 
 Keep the project small. The goal is a minimal, readable reference, not a general-purpose importer. Established alternatives are listed in README.md. Ask the user before adding features, dependencies, or configuration beyond what the current task needs.
 
 The two halves of this project are not held to the same standard. Fetching mail and putting it into Gmail is a commodity that many tools already implement, so that path stays as small as it can be, and anything the standard library already does is not reimplemented here. The rule that decides which messages are destroyed is specific to this project, and it is allowed to grow as the maintainer needs.
+
+## Current state
+
+As of 2026-09-15, the maintainer's `.env` holds working credentials and a refresh token. `tools/test_insert.py` put a test message into Gmail, and `tools/test_pop3.py` logged in to the POP3 mailbox, both successfully. The import tool itself is not written yet. Implementation waits on answers to the open questions other than the host, which can stay open while the code is written. `tools/show_info_from_uidl.py` is planned but deliberately not written.

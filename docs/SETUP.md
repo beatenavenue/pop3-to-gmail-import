@@ -2,7 +2,7 @@
 
 [日本語の説明はこちら](SETUP.ja.md)
 
-This document covers the one-time setup that has to be done by hand before the tool can run, from creating the Google Cloud project to obtaining and testing the OAuth refresh token. Running the tool itself is covered separately.
+This document covers the one-time setup that has to be done by hand before the tool can run, from creating the Google Cloud project to testing the OAuth refresh token and the POP3 connection. Running the tool itself is covered separately.
 
 Google Cloud console labels change from time to time. If a menu name below does not match what you see, look for the closest equivalent.
 
@@ -106,10 +106,11 @@ Each run issues a new refresh token. Only the 100 most recent tokens for the sam
 
 The host needs the client JSON as well as the refresh token, because refreshing an access token also sends the client ID and secret.
 
-1. In the repository root on that host, copy `.env.example` to `.env`.
-2. Copy the client JSON to the host, outside the repository, and set its path as `GOOGLE_CLIENT_SECRET_FILE`.
-3. Set the refresh token from step 8 as `GOOGLE_REFRESH_TOKEN`. Write values without quotes.
-4. Make both files readable only by your user.
+1. In the repository root on that host, copy `.env.example` to `.env`. Write every value without quotes.
+2. Set the POP3 details from step 7 as `POP3_HOST`, `POP3_PORT`, `POP3_TLS`, `POP3_USER`, and `POP3_PASSWORD`. Set `POP3_TLS` to `true` when the connection uses TLS from the start, usually on port 995, or to `false` for plain POP3 on port 110, which the tool upgrades with STLS. The tool never connects without TLS.
+3. Copy the client JSON to the host, outside the repository, and set its path as `GOOGLE_CLIENT_SECRET_FILE`.
+4. Set the refresh token from step 8 as `GOOGLE_REFRESH_TOKEN`.
+5. Make both files readable only by your user.
 
    ```
    chmod 600 .env /path/to/client_secret.json
@@ -130,6 +131,22 @@ This reads `.env`, refreshes an access token, and adds one synthetic message to 
 **The test message will almost certainly go to the Spam folder, not the inbox.** It comes from a placeholder address at `example.com` and has no DKIM signature, so Gmail treats it as spam. This is expected and does not mean the test failed. Look for it in Spam and delete it when you are done.
 
 Each run adds one more message.
+
+## 11. Test the POP3 connection
+
+Run the following from the repository root on the host.
+
+```
+python3 tools/test_pop3.py
+```
+
+This reads `.env`, connects to the POP3 server with TLS the same way the tool does, logs in, and prints the number of messages in the mailbox, for example `connected messages=12`. It never retrieves or deletes a message, so the mailbox is left as it was. On failure it prints the error and exits with a non-zero status.
+
+If the server offers webmail, the count should match the number of messages in its inbox.
+
+POP3 servers usually lock the mailbox while a session is open. If Gmail still fetches this mailbox (see step 6) or a mail client is checking it at the same moment, the login can fail. Wait a little and run it again.
+
+With `POP3_TLS=false`, the server has to list `STLS` in its reply to the `CAPA` command. A server that offers neither POP3 over TLS nor STLS cannot be used.
 
 ## When the refresh token stops working
 

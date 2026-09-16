@@ -71,8 +71,8 @@ Standard use of the Gmail API is free. One `messages.import` call costs 25 quota
 
 ## Status
 
-Work in progress. The design above is settled. The implementation is not written yet.
+The design above is settled, and the implementation is written. It has fetched real mail over POP3, applied the rule, and imported the result into Gmail. It has not been in use for long, so read the code before pointing it at a mailbox that matters.
 
-## Setup
+## Setup and usage
 
-Account and API setup that has to be done by hand is described in [docs/SETUP.md](docs/SETUP.md).
+Account and API setup that has to be done by hand is described in [docs/SETUP.md](docs/SETUP.md). Running the tool, and dealing with a message it could not import, is described in [docs/USAGE.md](docs/USAGE.md).

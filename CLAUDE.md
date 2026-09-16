@@ -70,6 +70,8 @@ The tool is started by an external scheduler such as cron, on whatever schedule 
 
 A key missing from `.env` ends in a `KeyError` traceback, and that is accepted. Users start from a copy of `.env.example`, which has every key, so do not add a friendlier check.
 
+A relative path in `.env` is resolved against the repository root, for `GOOGLE_CLIENT_SECRET_FILE` as well as `STATE_FILE`. A scheduler does not necessarily start the tool from there, so resolving against the current directory would break under cron. Joining the root with an absolute path leaves it unchanged, so the values SETUP asks for still work.
+
 Obtaining the refresh token is a separate one-off program. Keep it out of the import path, since the import path runs unattended and never needs a browser.
 
 In names, "insert" refers to the Gmail API side, after the `gmail.insert` scope, and "import" is reserved for real mail fetched over POP3. This holds even though both call `users.messages.import`. `tools/test_insert.py` pushes a synthetic test message and is named that way on purpose, so do not rename it.
@@ -80,7 +82,7 @@ A real rule names real addresses, so `mail_filter.py` is listed in `.gitignore`.
 
 If the rule raises, the message is neither imported nor deleted, the other messages are still processed, and the run exits non-zero. Importing when the rule is broken could store exactly what the rule exists to destroy.
 
-Output names a message by its UIDL and never by anything taken from the message, such as its subject, its sender, or an exception message that might quote a header. The tool runs unattended and its output is kept in logs, which should only show what happened to which UIDL. `tools/show_info_from_uidl.py`, planned below, looks up the headers for a UIDL when someone needs them.
+Output names a message by its UIDL and never by anything taken from the message, such as its subject, its sender, or an exception message that might quote a header. The tool runs unattended and its output is kept in logs, which should only show what happened to which UIDL. `tools/show_info_from_uidl.py`, described below, looks up a UIDL and prints what someone needs to find the message.
 
 Imported and rejected messages are recorded in a state file. Its path is `STATE_FILE` in `.env`, and a relative path is resolved against the repository root. The file is plain text with one line per message, holding a status word, a space, and the UIDL, such as `imported 000001a2b3c4d5e6` or `rejected 000001a2b3c4d5e8`. RFC 1939 limits a UIDL to 1 to 70 characters from 0x21 to 0x7E, so it never contains a space. The file holds identifiers only. Messages discarded by the filter are not recorded, since evaluating the rule again gives the same result.
 
@@ -92,19 +94,18 @@ The following is still open. Ask the user instead of choosing.
 
 - Which host the tool runs on. Do not write deployment files before this is settled. No recommendation has been given
 
-### Planned `tools/show_info_from_uidl.py`
+### `tools/show_info_from_uidl.py`
 
-This tool is not written yet, on purpose. There is no rejected message to test it against yet.
-
-It takes a UIDL as its argument and prints enough about the matching message on the POP3 server for the user to find it in a regular mail client.
+It takes a UIDL as its argument and prints enough about the matching message on the POP3 server for the user to find it in a regular mail client. It does not show the whole message. The user identifies the message from this output and does the rest in a client such as Thunderbird.
 
 - Read the POP3 settings from `.env`. No Gmail credentials are needed
-- Find the message number with `UIDL`, its size with `LIST`, and its headers with `TOP <number> 0`, so the body is never downloaded
-- Print Subject, From, To, Date, Message-ID, the timestamp of the topmost `Received` header, and the size. Date is set by the sender and can be wrong, especially on spam, while the topmost `Received` header shows when the server accepted the message
-- Decode headers with `email.parser.BytesHeaderParser` and `email.policy.default`, and print a header raw when it cannot be decoded
-- Write only to standard output, never to disk, and never send `RETR` or `DELE`
+- Find the message number with `UIDL` and retrieve the whole message with `RETR`. The maintainer added attachments to the output on 2026-09-16, and telling whether a message has any needs the body, so headers alone from `TOP <number> 0` are not enough. `RETR` does not change the mailbox, and a message reported by `mail_import.py` has been retrieved once already
+- Print Subject, From, To, Cc, Date, the date of the topmost `Received` header, Message-ID, the number of attachments, and the size. Date is set by the sender and can be wrong, especially on spam, while the topmost `Received` header shows when the server accepted the message
+- Count a MIME part as an attachment when it has a filename, the same test as the example rule in `mail_filter.example.py`
+- Give the size as the length of the retrieved bytes, which is what `mail_import.py` uploads
+- Decode headers with `email.policy.default`, and print a header raw when it cannot be decoded. Escape control characters, since the sender wrote the headers and the output goes to a terminal
+- Write only to standard output, never to disk, and never send `DELE`
 - Exit non-zero when the UIDL is not on the server or the session fails
-- `TOP` is optional in RFC 1939. Check that the server supports it when the tool is written
 
 POP3 servers usually lock the mailbox for the length of a session, so running this at the same time as a scheduled run makes one of the two fail to log in.
 
@@ -116,4 +117,4 @@ The two halves of this project are not held to the same standard. Fetching mail 
 
 ## Current state
 
-As of 2026-09-15, the maintainer's `.env` holds working credentials and a refresh token. `tools/test_insert.py` put a test message into Gmail, and `tools/test_pop3.py` logged in to the POP3 mailbox, both successfully. `mail_import.py` and `mail_filter.example.py` are written and pass a check against a local fake POP3 server and a fake Gmail endpoint. On 2026-09-16 `mail_import.py` also imported mail successfully from a test POP3 mailbox, which is what the maintainer's `.env` points at for now. It has not run against the real mailbox yet. The maintainer's real rule in `mail_filter.py` is not written yet. README still says the implementation is not written, and running the tool is not documented yet. `tools/show_info_from_uidl.py` is planned but deliberately not written.
+As of 2026-09-15, the maintainer's `.env` holds working credentials and a refresh token. `tools/test_insert.py` put a test message into Gmail, and `tools/test_pop3.py` logged in to the POP3 mailbox, both successfully. `mail_import.py` and `mail_filter.example.py` are written and pass a check against a local fake POP3 server and a fake Gmail endpoint. On 2026-09-16 a check of the same kind covered the rejection path, with the fake endpoint returning 400, 413, and 503. On 2026-09-16 `mail_import.py` also imported mail successfully from a test POP3 mailbox, which is what the maintainer's `.env` points at for now. It has not run against the real mailbox yet. The maintainer's real rule in `mail_filter.py` is not written yet. README now says the implementation is written and has handled real mail. `docs/USAGE.md` and its translation describe running the tool, the state file, and dealing with a rejected message. `tools/show_info_from_uidl.py` is written and passes a check against a local fake POP3 server with synthetic mail. On 2026-09-16 it also showed a plain message and a message with an attachment in the test POP3 mailbox as expected. It has not been tried on a real rejected message yet.

@@ -25,7 +25,8 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
+ROOT = Path(__file__).resolve().parent.parent
+ENV_FILE = ROOT / ".env"
 IMPORT_URL = "https://gmail.googleapis.com/upload/gmail/v1/users/me/messages/import?uploadType=multipart"
 
 
@@ -50,7 +51,7 @@ def post(url, data, headers):
 
 def main():
     env = read_env(ENV_FILE)
-    with open(env["GOOGLE_CLIENT_SECRET_FILE"], encoding="utf-8") as f:
+    with open(ROOT / env["GOOGLE_CLIENT_SECRET_FILE"], encoding="utf-8") as f:
         client = json.load(f)["installed"]
 
     tokens = post(client["token_uri"], urllib.parse.urlencode({

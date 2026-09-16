@@ -95,7 +95,7 @@ def append_state(path, status, uidl):
 
 
 def refresh_access_token(env):
-    with open(env["GOOGLE_CLIENT_SECRET_FILE"], encoding="utf-8") as f:
+    with open(ROOT / env["GOOGLE_CLIENT_SECRET_FILE"], encoding="utf-8") as f:
         client = json.load(f)["installed"]
     data = urllib.parse.urlencode({
         "client_id": client["client_id"],

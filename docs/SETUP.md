@@ -2,7 +2,7 @@
 
 [日本語の説明はこちら](SETUP.ja.md)
 
-This document covers the one-time setup that has to be done by hand before the tool can run, from creating the Google Cloud project to testing the OAuth refresh token and the POP3 connection. Running the tool itself is covered separately.
+This document covers the one-time setup that has to be done by hand before the tool can run, from creating the Google Cloud project to testing the OAuth refresh token and the POP3 connection. Running the tool itself is covered in [USAGE.md](USAGE.md).
 
 Google Cloud console labels change from time to time. If a menu name below does not match what you see, look for the closest equivalent.
 

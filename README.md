@@ -21,13 +21,13 @@ This project only makes sense if you cannot forward at the source *and* you need
 
 ## Why this exists
 
-The author's employer runs a POP3-only mail server. Forwarding cannot be set up from the user side, and asking the administrators is not expected to lead anywhere soon. The mailbox is small and fills up quickly, so it has to be emptied on every fetch.
+The author's employer runs a POP3-only mail server. Forwarding cannot be set up from the user side, and asking the administrators is not expected to lead anywhere soon. The mailbox is small and fills up quickly, so it has to be emptied regularly.
 
 The address is also subscribed to a sales department mailing list. Mail sent to that list often carries attachments the author should not keep, such as spreadsheets containing customer data. The author has no use for them and can ask the department directly when needed. A Gmail filter could delete these messages, but deleted mail stays in Gmail's trash for 30 days. The goal is to never store them at all.
 
 The requirements are therefore these.
 
-- Empty the POP3 mailbox on every run.
+- Keep the POP3 mailbox empty, by deleting from it whatever has been dealt with.
 - Read mail in Gmail on both desktop and phone, and rely on Gmail's spam filtering.
 - Drop messages that have the list address in To or Cc *and* carry an attachment, before they reach Gmail.
 
@@ -60,6 +60,12 @@ Gmail's own POP3 fetch also retrieved mail after the first hop, so it presumably
 A message is deleted from the POP3 server only after Gmail confirms the import, or after the tool deliberately discards it. On any error the message stays on the server and is retried on the next run. The failure mode is mail piling up on the server, not mail being lost.
 
 Because the source mailbox is small, a pile-up still becomes a problem quickly. The tool exits with a non-zero status on failure and is meant to be paired with some form of failure notification.
+
+### A limit on each run
+
+A run handles at most `MAX_MESSAGES_PER_RUN` messages, 200 by default, and leaves the rest on the server for the next run. A mailbox with a backlog, or one that receives a lot of mail, would otherwise keep a single run going for a long time. That is worth avoiding, because a POP3 server locks the mailbox for the length of a session, and because an error late in a long run leaves everything after it unhandled anyway.
+
+Messages are handled in the order the server lists them, which is the order they arrived, so the oldest are always the ones that go first. The limit means the mailbox is emptied over several runs rather than one, and it only keeps up if the schedule is frequent enough for the amount of mail that arrives. The default of 200 matches what Gmail's own POP3 fetch retrieved at a time.
 
 ### Filtering before import
 

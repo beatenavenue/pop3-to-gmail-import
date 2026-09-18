@@ -9,8 +9,9 @@ Usage:
 runs once and exits, so a scheduler such as cron starts it. Every message it
 fetches is either discarded by the rule in mail_filter.py or imported into
 Gmail with the INBOX and UNREAD labels, and is then deleted from the server.
-A message that could not be handled stays on the server, and the tool exits
-with a non-zero status.
+A run handles at most MAX_MESSAGES_PER_RUN messages, and the rest wait for the
+next run. A message that could not be handled stays on the server, and the
+tool exits with a non-zero status.
 
 Output names a message by its UIDL only. Nothing taken from a message, such as
 its subject or sender, is printed, since the output usually ends up in a log.
@@ -166,8 +167,9 @@ def describe_filter_error(error):
 def main():
     env = read_env(ENV_FILE)
     state_file = ROOT / env["STATE_FILE"]
+    limit = int(env["MAX_MESSAGES_PER_RUN"])
     access_token = refresh_access_token(env)
-    counts = {"imported": 0, "discarded": 0, "rejected": 0, "skipped": 0}
+    counts = {"imported": 0, "discarded": 0, "rejected": 0, "skipped": 0, "deferred": 0}
     failed = False
 
     try:
@@ -180,7 +182,14 @@ def main():
         state = {uidl: status for uidl, status in read_state(state_file).items() if uidl in on_server}
         write_state(state_file, state)
 
-        for number, uidl in listing:
+        # A busy mailbox holds more than one run can get through, so a run takes
+        # the first MAX_MESSAGES_PER_RUN entries and leaves the rest. UIDL lists
+        # messages in arrival order, so the oldest are handled first. The state
+        # file is still pruned against the whole listing above, since a message
+        # this run never reaches is still on the server.
+        counts["deferred"] = max(len(listing) - limit, 0)
+
+        for number, uidl in listing[:limit]:
             if state.get(uidl) == "rejected":
                 counts["skipped"] += 1
                 continue

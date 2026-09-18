@@ -30,7 +30,7 @@ If the rule raises an exception, the message is neither imported nor deleted. Se
 
 ### Know what the first run does
 
-The first run handles every message on the POP3 server. Each one is either imported into Gmail or discarded by the rule, and then deleted from the server. If you want to keep a copy of what is on the server now, download it with a regular mail client first.
+The first run handles what is on the POP3 server now, up to `MAX_MESSAGES_PER_RUN` messages, 200 by default. Each one is either imported into Gmail or discarded by the rule, and then deleted from the server. A mailbox holding more than that is emptied over the runs that follow. If you want to keep a copy of what is on the server now, download it with a regular mail client first.
 
 ## Running the tool
 
@@ -44,23 +44,32 @@ A run goes through these steps.
 
 1. Refresh the Gmail access token.
 2. Log in to the POP3 server and list the messages by UIDL.
-3. For each message, retrieve it and evaluate the rule. The message is then either deleted, or imported into Gmail and deleted. Messages already in the state file are handled as described in [The state file](#the-state-file).
+3. For each message, up to `MAX_MESSAGES_PER_RUN` of them, retrieve it and evaluate the rule. The message is then either deleted, or imported into Gmail and deleted. Messages already in the state file are handled as described in [The state file](#the-state-file).
 4. End the session with `QUIT`. This is when the POP3 server actually deletes the messages.
 
 When the run gets through the POP3 session, it ends by printing one line of counts to standard output.
 
 ```
-imported=3 discarded=1 rejected=0 skipped=0
+imported=3 discarded=1 rejected=0 skipped=0 deferred=0
 ```
 
 - `imported` is the number of messages imported into Gmail with the `INBOX` and `UNREAD` labels and deleted from the server.
 - `discarded` is the number of messages the rule discarded. They were deleted without being imported.
 - `rejected` is the number of messages Gmail refused in this run. They stay on the server.
 - `skipped` is the number of messages Gmail refused in an earlier run. They stay on the server and are not sent again.
+- `deferred` is the number of messages the run did not reach, because it had taken `MAX_MESSAGES_PER_RUN` messages already. They stay on the server, and the next run takes them first.
 
 The tool exits with status 0 when nothing in the run failed, and with a non-zero status otherwise. Messages skipped as rejected in an earlier run do not count as a failure. Errors go to standard error.
 
 Output names a message only by its UIDL, never by its subject or sender, so it can be kept in logs.
+
+### How much one run handles
+
+`MAX_MESSAGES_PER_RUN` in `.env` sets how many messages a run takes from the listing, 200 by default. Anything past it is left on the server and counted as `deferred`. Reaching the limit is not a failure, so the run still exits with status 0.
+
+The limit counts every entry in the listing, including a message that is only skipped because an earlier run recorded it as rejected. Messages are taken in the order the server lists them, which is the order they arrived, so the oldest always go first.
+
+A mailbox is therefore emptied over several runs rather than one. If runs keep ending with a `deferred` count, mail is arriving faster than the schedule and the limit together can carry. Run the tool more often, or raise the value.
 
 ### Errors
 
@@ -90,7 +99,7 @@ Every error line starts with `error:`. A line that names a UIDL concerns that on
 
 The tool runs once and exits. To keep the mailbox empty, start it from a scheduler such as cron, at whatever interval suits you. It finds `.env`, `mail_filter.py`, and the state file next to `mail_import.py`, so the scheduler can start it by its full path from any directory.
 
-Pair it with some form of failure notification. A non-zero exit status is the only sign that something needs attention.
+Pair it with some form of failure notification. A non-zero exit status is the only sign that something needs attention. A `deferred` count is not one of those signs, since the run ends with status 0, so watch the counts as well if the mailbox is a busy one.
 
 A POP3 mailbox can be used by only one session at a time. If a run is still going when the next one starts, or a mail client is checking the same mailbox, the login fails and the run exits non-zero. The next run tries again.
 
@@ -110,7 +119,7 @@ rejected 000001a2b3c4d5e8
 
 Messages discarded by the rule are not recorded, since evaluating the rule again gives the same result.
 
-At the start of every run, lines for messages that are no longer on the server are removed. Once you delete a rejected message from the server, the next run removes its line, and the file never grows beyond what is on the server.
+At the start of every run, lines for messages that are no longer on the server are removed. This looks at the whole mailbox, not only at the messages the run goes on to handle. Once you delete a rejected message from the server, the next run removes its line, and the file never grows beyond what is on the server.
 
 The file holds UIDLs only, never anything taken from the messages.
 

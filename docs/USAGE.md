@@ -99,9 +99,27 @@ Every error line starts with `error:`. A line that names a UIDL concerns that on
 
 The tool runs once and exits. To keep the mailbox empty, start it from a scheduler such as cron, at whatever interval suits you. It finds `.env`, `mail_filter.py`, and the state file next to `mail_import.py`, so the scheduler can start it by its full path from any directory.
 
+`tools/run_cron.sh` is a wrapper written for exactly that. It writes the date and time around the run, so a log shows when each run started and ended, and it takes a lock on `.cron.lock` in the repository root, so that two runs never overlap. Add a line like the following to your crontab with `crontab -e`, with the interval you want.
+
+```
+*/30 * * * * /path/to/pop3-to-gmail-import/tools/run_cron.sh
+```
+
+Its output looks like this.
+
+```
+2026-09-19T01:20:00+0900 start
+imported=3 discarded=1 rejected=0 skipped=0 deferred=0
+2026-09-19T01:20:12+0900 end status=0 seconds=12
+```
+
+The wrapper exits with the importer's own status, so a failure still reaches whatever watches the job. cron mails what the job writes to the owner of the crontab. To keep a log file instead, redirect in the crontab line, as the comment at the top of the script shows.
+
 Pair it with some form of failure notification. A non-zero exit status is the only sign that something needs attention. A `deferred` count is not one of those signs, since the run ends with status 0, so watch the counts as well if the mailbox is a busy one.
 
-A POP3 mailbox can be used by only one session at a time. If a run is still going when the next one starts, or a mail client is checking the same mailbox, the login fails and the run exits non-zero. The next run tries again.
+A POP3 mailbox can be used by only one session at a time, so runs must not overlap. The lock in `tools/run_cron.sh` is what keeps them apart. A run that finds the lock held prints `not started, another run holds ...` and exits 0, since one overlap is not a failure in itself. If that line keeps appearing, runs are taking longer than the interval between them, and the schedule or the limit needs looking at.
+
+A mail client checking the same mailbox is outside that lock. A run that meets one fails at login and exits non-zero, and the next run tries again.
 
 ## The state file
 

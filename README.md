@@ -17,7 +17,17 @@ Gmail no longer lets new users fetch mail from other accounts over POP3, and exi
   - [Turbogmailify](https://github.com/YoRyan/turbogmailify) imports from IMAP and can use IDLE for near real-time delivery.
   - InboxBridge is a self-hosted importer with a web UI.
 
-This project only makes sense if you cannot forward at the source *and* you need to drop some messages before they are stored anywhere.
+This project only makes sense if you cannot forward at the source, you need to drop some messages before they are stored anywhere, *and* reading the mail is all you have to do with it. The last point is important enough to spell out.
+
+## It only solves receiving
+
+This tool moves mail in one direction. It takes messages out of the POP3 mailbox and puts them into Gmail. It does nothing at all about sending.
+
+Replying to an imported message in Gmail sends the reply from the Gmail address, not from the address the sender wrote to. The other party sees a different address, replies to that one from then on, and the conversation moves off the original address. Gmail's "Send mail as" can register another address, but sending through it still needs an SMTP server on the other side, with a host name, a user name, and a password. A POP3-only mail service does not necessarily offer one that Gmail can use, and an employer may not permit it even where it exists. Nothing in this project fills that gap.
+
+The author only has to read this mail and answers elsewhere, so this costs nothing here. The design follows from that, and it is a convenience of the author's own situation rather than a general solution.
+
+If you have to reply from the address, consolidating it into Gmail may well be an anti-pattern for you. Look at another solution instead, such as a mail client that keeps the account as its own account and sends through the provider's server. Decide that before you point this tool at a mailbox, because once the mailbox is being emptied into Gmail, the sending half of the problem is still waiting.
 
 ## Why this exists
 

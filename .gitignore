@@ -19,6 +19,9 @@ mail_filter.py
 state.txt
 state.txt.tmp
 
+# Lock file that tools/run_cron.sh holds for the length of a run.
+.cron.lock
+
 # Python bytecode, virtual environments and development tool caches.
 __pycache__/
 *.py[cod]

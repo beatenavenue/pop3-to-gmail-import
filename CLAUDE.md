@@ -44,6 +44,8 @@ Provide `.example` files with placeholder values, and keep the real files listed
 
 Write for anyone who might use the tool, with work or private mail, on any machine and on any schedule. Do not describe the maintainer's own deployment anywhere in the repository, such as the kind of machine they run it on or the times they run it. The motivation in README that helps a reader decide whether the tool fits them is the exception.
 
+This covers deployment files as well. A systemd unit, an installed crontab, a container image, or anything else carrying one host's paths, user names, and schedule belongs on that host, not here. Where a scheduler has to be shown, show it the way `tools/run_cron.sh` does, with paths derived from the location of the file and the interval left to the reader. Which host the maintainer runs the tool on is their own business and not a question for this repository.
+
 ## Invariants
 
 - Never delete a message from the POP3 server unless it was imported successfully or intentionally discarded by the filter.
@@ -96,10 +98,6 @@ The state file is pruned against the whole listing, never against the part a run
 
 A message Gmail rejects permanently stays on the POP3 server, and the user resolves it with a regular POP3 client such as Thunderbird. It is recorded as rejected and skipped on later runs. Only the run that meets the rejection exits non-zero, since exiting non-zero on every run would notify on every run until the user deals with the message. Only HTTP 400 and 413 count as permanent, since they point at the message itself. Any other error, 401, 403, 429, 5xx, and network errors included, concerns the account or the service. It stops the run, `QUIT` commits the deletions made so far, and the remaining messages wait for the next run.
 
-The following is still open. Ask the user instead of choosing.
-
-- Which host the tool runs on. Do not write deployment files before this is settled. No recommendation has been given
-
 ### `tools/show_info_from_uidl.py`
 
 It takes a UIDL as its argument and prints enough about the matching message on the POP3 server for the user to find it in a regular mail client. It does not show the whole message. The user identifies the message from this output and does the rest in a client such as Thunderbird.
@@ -115,6 +113,20 @@ It takes a UIDL as its argument and prints enough about the matching message on 
 
 POP3 servers usually lock the mailbox for the length of a session, so running this at the same time as a scheduled run makes one of the two fail to log in.
 
+### `tools/run_cron.sh`
+
+A bash wrapper that cron starts in place of `mail_import.py`. It exists because the importer prints no dates and takes no lock, and both are wanted once an unattended scheduler runs it.
+
+- Print the date and time on a `start` line before the run and on an `end` line after it, with `date +%Y-%m-%dT%H:%M:%S%z`. The end line also carries the importer's exit status and the elapsed seconds from `SECONDS`
+- Hold a lock on `.cron.lock` in the repository root for the length of the run, through `flock -n` on file descriptor 9. The kernel releases it when the shell exits, so a run that is killed does not lock the next one out. `.cron.lock` is listed in `.gitignore`
+- A run that cannot take the lock prints `not started, another run holds <path>` and exits 0. The maintainer chose this on 2026-09-19. One overlap is not a failure, and exiting non-zero would notify every time a run ran long. The cost is that a hung run holding the lock stops imports quietly, so the line is documented in `docs/USAGE.md` as something to watch
+- Exit with the importer's own status in every other case, so the non-zero on failure invariant still reaches the caller
+- Resolve the repository root from the path of the script, so cron can start it by its full path from any directory
+- Stop with a non-zero status and a message if `flock` is missing, rather than running unlocked
+- Write nothing to a log file of its own. cron mails what the job writes, and the comment at the top of the script shows the redirect for those who want a file instead
+
+It was checked on 2026-09-19 against a stub `mail_import.py`, covering a normal run, a non-zero exit from the importer, an overlapping run, a run started from another directory, a run killed mid-session, and a cron like environment with an empty environment and a minimal PATH. It has not been registered in a real crontab.
+
 ## Scope
 
 Keep the project small. The goal is a minimal, readable reference, not a general-purpose importer. Established alternatives are listed in README.md. Ask the user before adding features, dependencies, or configuration beyond what the current task needs.
@@ -127,4 +139,4 @@ As of 2026-09-15, the maintainer's `.env` holds working credentials and a refres
 
 On 2026-09-18 the per-run limit was added as `MAX_MESSAGES_PER_RUN`, because the mailbox the tool is meant for receives far more mail per day than one run should take in one session. It was checked with a fake POP3 session and a fake import over eight cases, covering a listing above, at, and below the limit, a limit of 0, entries the state file records as imported or rejected inside the window, a discarded message, a rejection with a remainder left over, and a state line for a message past the limit surviving the startup pruning. README, `docs/USAGE.md`, `.env.example`, and the translations were updated in the same change, and the README requirement now reads as keeping the mailbox empty rather than emptying it on every run.
 
-On 2026-09-19 the limit was exercised end to end against the test POP3 mailbox, with `MAX_MESSAGES_PER_RUN` set to 1 and three messages waiting. Four runs in a row reported `deferred` as 2, 1, 0, and 0, importing two messages and discarding one, all with exit status 0. The state file was empty afterwards, which is the startup pruning dropping each `imported` line once its message had left the server. The real mailbox has still not been touched, and the limit has not been exercised at its default of 200. The maintainer's `.env` still carries the test value of 1, so it has to go back to 200 before the tool is scheduled.
+On 2026-09-19 `tools/run_cron.sh` was added, with `docs/USAGE.md` and its translation updated in the same change. On 2026-09-19 the limit was exercised end to end against the test POP3 mailbox, with `MAX_MESSAGES_PER_RUN` set to 1 and three messages waiting. Four runs in a row reported `deferred` as 2, 1, 0, and 0, importing two messages and discarding one, all with exit status 0. The state file was empty afterwards, which is the startup pruning dropping each `imported` line once its message had left the server. The real mailbox has still not been touched, and the limit has not been exercised at its default of 200. The maintainer's `.env` still carries the test value of 1, so it has to go back to 200 before the tool is scheduled.
